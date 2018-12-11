@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import requests
-from multiprocessing import Process, Queue, current_process
+import multiprocessing
+from multiprocessing import Process, Queue, current_process, freeze_support
 
 NUM_WORKERS = 4
 
@@ -25,35 +26,10 @@ def main():
     'https://google.com',
     'https://sudokrew.com',
     'https://www.devleague.com',
-    'https://google.com',
-    'https://sudokrew.com',
-    'https://www.devleague.com',
-    'https://google.com',
-    'https://sudokrew.com',
-    'https://www.devleague.com',
-    'https://google.com',
-    'https://sudokrew.com',
-    'https://www.devleague.com',
-    'https://google.com',
-    'https://sudokrew.com',
-    'https://www.devleague.com',
-    'https://google.com',
-    'https://sudokrew.com',
-    'https://www.devleague.com',
-    'https://google.com',
-    'https://sudokrew.com',
-    'https://www.devleague.com',
-    'https://google.com',
-    'https://sudokrew.com',
-    'https://www.devleague.com',
-    'https://google.com',
-    'https://sudokrew.com',
-    'https://www.devleague.com',
-    'https://google.com',
-    'https://sudokrew.com',
-    'https://www.devleague.com'
   ]
+
   for i in range(NUM_WORKERS):
+    #freeze_support()
     Process(target=scraper, args=(process_queue, done_queue)).start()
 
   for domain in domain_list:
@@ -64,4 +40,4 @@ def main():
 
     
 if __name__ == "__main__":
-  main()
+    main()
