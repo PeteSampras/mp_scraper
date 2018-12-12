@@ -6,7 +6,7 @@ import sys
 from cp_modules.utility import colorize,header
 import requests
 import multiprocessing
-from multiprocessing import Process, Queue, current_process, freeze_support
+from multiprocessing import Process, Queue, current_process, freeze_support, Manager
 import os
 #from queue import Queue
 #from cp_modules.option_menus import menu_options,mainmenu,start_processing#,stop_processing
@@ -18,11 +18,20 @@ NUM_WORKERS = 4
 done_queue = Queue() # This is messages from the child processes for parent
 process_queue = Queue() # This is the domains to process
 
+manager = Manager()
+done_list = manager.list()
+
+def add_done_list(domain):
+    global done_list
+    done_list.append(str(domain))
+    print(done_list)
+
 def scraper(input, output):
   # output.put("{} starting".format(current_process().name))
   for domain in iter(input.get, 'STOP'):
     result = requests.get(domain)
     output.put("{}: Domain {} retrieved with {} bytes".format(current_process().name, domain, len(result.text)))
+
 
 def add_to_queue(domain):
     process_queue.put(domain)
@@ -40,6 +49,7 @@ def main():
 def menu_options(selection):
     if selection==None:
         options = ['MAIN MENU','Add domain','Start processing queue','Stop processing queue','Display logs']
+        print (colorize(options[0],'pink'))
         for i in range(1,5):
             print(str(i) + '. '+options[i])
     else:
@@ -143,10 +153,12 @@ def add_domain_name():
     return p
 
 def display_logs():
-    #for each in iter(done_queue.get,'STOP'):
-    #    print(str(each))
-    #    pass
-    return p
+    print('Completed items:\n')
+    print(done_list)
+    for each in done_list:
+        print(each)
+    menu_options(None)
+    return
 
 
 
