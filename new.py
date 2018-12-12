@@ -8,12 +8,19 @@ import requests
 import multiprocessing
 from multiprocessing import Process, Queue, current_process, freeze_support, Manager
 import os
+import logging
+import time
+import re
+from bs4 import BeautifulSoup
+import urllib.request
+
 #from queue import Queue
 #from cp_modules.option_menus import menu_options,mainmenu,start_processing#,stop_processing
 
 config_file="domains.ini"
 config = configparser.ConfigParser()            # setup
 NUM_WORKERS = 4
+log_name='gets_log.log'
 
 done_queue = Queue() # This is messages from the child processes for parent
 process_queue = Queue() # This is the domains to process
@@ -21,17 +28,51 @@ process_queue = Queue() # This is the domains to process
 manager = Manager()
 done_list = manager.list()
 
-def add_done_list(domain):
-    global done_list
-    done_list.append(str(domain))
-    print(done_list)
+def logger(data):
+    logging.basicConfig(level=logging.INFO,filename=log_name)
+    logging.info(str(data))
+    
+def rescrape():
+    file = open(log_name,'r')
+    for line in file:
+        line=line.replace("INFO:root:[","")
+        line=line.replace("]",'')
+        line=line.replace(", '",'')
+        new_line = line.split("\'")
+        site=new_line[1]
+        print(site)
+        for each in new_line:
+            if each==new_line[1]:
+                continue
+            if len(each)>1:
+                if not "://" in each:
+                    each=site+each
+                scrape(each)
+    file.close()
+
+
+def scrape(this_url):
+    data = []
+    data.append(this_url)
+    result = requests.get(this_url)
+    if result.status_code == 200:
+        soup = BeautifulSoup(result.text,'html.parser')
+        for link in soup.findAll('a',href=True):
+            if "/" in link.get('href'):
+                data.append(link.get('href'))
+        #print(str(data) + ' ##2')
+        logger(data)
+    else:
+        print('Failed: {} - {}' .format(result.text,result.status_code))
+
+
 
 def scraper(input, output):
   # output.put("{} starting".format(current_process().name))
-  for domain in iter(input.get, 'STOP'):
-    result = requests.get(domain)
-    output.put("{}: Domain {} retrieved with {} bytes".format(current_process().name, domain, len(result.text)))
-
+    for domain in iter(input.get, 'STOP'):
+        scrape(domain)
+        output.put("{}: Domain {} retrieved".format(current_process().name, domain))
+    
 
 def add_to_queue(domain):
     process_queue.put(domain)
@@ -48,9 +89,9 @@ def main():
 
 def menu_options(selection):
     if selection==None:
-        options = ['MAIN MENU','Add domain','Start processing queue','Stop processing queue','Display logs']
+        options = ['MAIN MENU','Add domain','Start processing queue','Stop processing queue','Display logs','Spider crawl logged sites']
         print (colorize(options[0],'pink'))
-        for i in range(1,5):
+        for i in range(1,6):
             print(str(i) + '. '+options[i])
     else:
         options = ['SUB MENU']
@@ -75,6 +116,8 @@ def mainmenu():
                 d = stop_processing()
             elif option == '4':
                 d = display_logs()
+            elif option=='5':
+                d = rescrape()
             else:
                 print (colorize('Invalid selection!','warning'))
 
@@ -153,10 +196,15 @@ def add_domain_name():
     return p
 
 def display_logs():
-    print('Completed items:\n')
-    print(done_list)
-    for each in done_list:
-        print(each)
+    file = open(log_name,'r')
+    for line in file:
+        line=line.replace("INFO:root:[","")
+        line=line.replace("]",'')
+        line=line.replace(", '",'')
+        new_line = line.split('\'')
+        for each in new_line:
+            print(each)
+    file.close()
     menu_options(None)
     return
 
