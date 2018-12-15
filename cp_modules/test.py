@@ -11,6 +11,7 @@ def worker(input, output):
     for func, args in iter(input.get, 'STOP'):
         result = calculate(func, args)
         output.put(result)
+        
 
 #
 # Function used to calculate result

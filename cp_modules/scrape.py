@@ -2,10 +2,19 @@
 import requests
 from bs4 import BeautifulSoup
 from time import sleep
-from multiprocessing import Pool
+from multiprocessing import Pool,Manager
 
+# NUM_WORKERS = 4
+website = 'https://www.devleague.com'
+
+manager = Manager()
+start_list = manager.list()
+done_list = manager.list()
+start_list.append(website)
 
 def get_listing(url):
+    # headers = {
+    #     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36'}
     html = None
     links = None
     r = requests.get(url, timeout=10)
@@ -17,6 +26,8 @@ def get_listing(url):
         links = [link['href'].strip() for link in listing_section]
     return links
 
+search = get_listing(website)
+
 def parse(links):
     #links=list(set(links)) # get uniques
     if not links.startswith('//'):
@@ -27,69 +38,72 @@ def parse(links):
             #     link = website+links
                 return link
             return links
-    
-    #links = [link in links if not link.startswith('//')]
-    #return links
 
-# parse a single item to get information
-def parse2(url):
-    # headers = {
-    #     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36'}
-    r = requests.get(url, timeout=10) # header=headers
-    sleep(2)
 
-    info = []
-    title_text = '-'
-    location_text = '-'
-    price_text = '-'
-    title_text = '-'
-    images = '-'
-    description_text = '-'
+def add_to_queue(domain):
+    process_queue.put(domain)
 
-    if r.status_code == 200:
-        print('Processing..' + url)
-        html = r.text
-        soup = BeautifulSoup(html, 'lxml')
-        title = soup.find('h1')
-        if title is not None:
-            title_text = title.text.strip()
+def diff(first, second):
+        second = set(second)
+        return [item for item in first if item not in second]
 
-        location = soup.find('strong', {'class': 'c2b small'})
-        if location is not None:
-            location_text = location.text.strip()
 
-        price = soup.select('div > .xxxx-large')
-        if price is not None:
-            price_text = price[0].text.strip('Rs').replace(',', '')
 
-        images = soup.select('#bigGallery > li > a')
-        img = [image['href'].strip() for image in images]
-        images = '^'.join(img)
+while len(diff(start_list,done_list))>0:
+    with Pool(10) as p:
+        print(start_list)
+        # global start_list
+        # global done_list
+        records = p.map(parse, start_list)
+        records=list(set(records))
+        print(records)
+        for each in records:
+            if each != None:
+                if not each in start_list and not each in done_list:
+                    if each.startswith('/'):
+                        each = website+each
+                        start_list.append(each)
 
-        description = soup.select('#textContent > p')
-        if description is not None:
-            description_text = description[0].text.strip()
-
-        info.append(url)
-        info.append(title_text)
-        info.append(location_text)
-        info.append(price_text)
-        info.append(images)
-
-    return ','.join(info)
-
-website = 'https://www.devleague.com'
-search = get_listing(website)
-
-with Pool(10) as p:
-    records = p.map(parse, search)
 
 # get uniques
-records=list(set(records))
 
-if len(records) > 0:
-    for each in records:
+
+if len(done_list) > 0:
+    for each in done_list:
         if each != None:
             print(each)
     # with open('data_parallel.csv', 'a+') as f:
     #     f.write('\n'.join(records))
+manager = Manager()
+# done_queue = Queue() # This is messages from the child processes for parent
+# process_queue = Queue() # This is the domains to process
+
+# def scraper(input_Q, output_Q):
+#     for domain in iter(input_Q.get, 'STOP'):
+#         if not domain in list(output_Q):
+
+
+# def add_to_queue():
+
+
+# def main():
+#     for i in range(NUM_WORKERS):
+#         Process(target=scraper, args=(process_queue, done_queue)).start()
+#         #Process(target=process_done_queue, args=(done_queue,)).start()
+#     process_queue.put(website)
+
+
+# if __name__=='__main__':
+#     try:
+#         main()
+#     except KeyboardInterrupt:
+#         print("Keyboard interrupted")
+#     except Exception as e:
+#         print(e)
+#     finally:
+#         print('Finished')
+#         os._exit(0)
+
+# def diff(first, second):
+#         second = set(second)
+#         return [item for item in first if item not in second]
