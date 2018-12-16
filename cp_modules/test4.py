@@ -19,34 +19,39 @@ manager = Manager()
 master_dict = manager.dict()
 website=''
 
-start = time.time()
-
 def scraper(process_queue, done_queue,master_queue,master):
-    #print(master)
-    #print("{} starting".format(current_process().name))
-    #print(master[1])
+    if time.time()-master[7]>5:
+        process_queue.put('STOP')
     for domain in iter(process_queue.get, 'STOP'):
         if len(domain)>0:
             print('Getting '+domain)
             result = get_listing(domain)
-            done_queue.put(domain)
+            # done_queue.put(domain)
+            # if domain.startswith('/'):
+            #     this = website+domain
+            #     master[4].append(this)
+            # else:
             master[4].append(domain)
-                #print(result)
             if result != None and len(result)>0:
-                    #print(result)
                 for link in result:
                     if not link in master[1]:
+                        if link.startswith('/'):
+                            link = domain+link
+                        # if not link.startswith('http') and not link.startswith('www'):
+                        #     link = domain+link
                         master[1].append(link)
             a = master[1]
             b = master[2]                
             diff=(difference(a,b))
-            print('Diff1: ' + str(len(diff)))
             for url in diff:
                 if not url in master[2]:
                     cat, link = parse(url)
                     if cat == 'link':
+                        # if link.startswith('/'):
+                        #     url=domain+link
                         master[3].append(link)
                         process_queue.put(link)
+                        master[7] = time.time()
                     elif cat == 'http':
                         master[6].append(link)
                     elif cat == 'mail':
@@ -57,7 +62,6 @@ def scraper(process_queue, done_queue,master_queue,master):
 
 
 def get_listing(url):
-    #print('url: {} , master {}, ' .format(url, len(masterlist)))
     # headers = {
     #     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36'}
     html = None
@@ -73,7 +77,6 @@ def get_listing(url):
         return links
 
 def parse(link):
-    #print('parse')
     if link == "''":
         return 'None', 'None'
     if link.startswith('//'):
@@ -105,29 +108,25 @@ def valid(master1,master2):
     return len(difference(a,b))
 
 def main(master):
-    global start
+    global last
     for i in range(NUM_WORKERS):
         p = Process(target=scraper, args=(process_queue, done_queue,master_queue,master))
         p.start()
         p.join()
-    # while (time.time()-start)<2:
-    #     pass
-    while valid(master[1],master[2])>0:
-        pass
-        # and len(difference(master[3],master[4]))>0
-        # master_list=list(set(master_list))
-        # ignore_list=list(set(ignore_list))
-    print(valid(master[1],master[2]))
+
+    while valid(master[1],master[2])>0 and (time.time()-master[7])<2:
+        print(time.time()-master[7])
+
 
     print('Big success')
-    print(master[1])
-    print(master[2])
-    print(master[4])
-    master[3]=list(set(master[3]))
+    master[4]=list(set(master[4]))
     master[5]=list(set(master[5]))
     master[6]=list(set(master[6]))
-    print(master[3])
+    print('Found links:')
+    print(master[4])
+    print('Found mail:')
     print(master[5])
+    print('Found external links:')
     print(master[6])
         
     
@@ -146,6 +145,8 @@ if __name__ == "__main__":
     master_dict[5] = manager.list()
     # http
     master_dict[6] = manager.list()
+    # time
+    master_dict[7] = time.time()
 
     master_dict[1].append(website)
     master_dict[3].append(website)
