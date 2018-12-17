@@ -8,7 +8,7 @@ import time
 import numpy as np
 import sys
 
-NUM_WORKERS = 4
+NUM_WORKERS = 4 #multiprocessing.cpu_count()
 
 done_queue = Queue() # This is messages from the child processes for parent
 process_queue = Queue() # This is the domains to process
@@ -21,24 +21,19 @@ website=''
 
 def scraper(process_queue, done_queue,master_queue,master):
     if time.time()-master[7]>5:
-        process_queue.put('STOP')
+        master_queue.put('STOP')
+
     for domain in iter(process_queue.get, 'STOP'):
+        print(multiprocessing.current_process().name)
         if len(domain)>0:
             print('Getting '+domain)
             result = get_listing(domain)
-            # done_queue.put(domain)
-            # if domain.startswith('/'):
-            #     this = website+domain
-            #     master[4].append(this)
-            # else:
             master[4].append(domain)
             if result != None and len(result)>0:
                 for link in result:
                     if not link in master[1]:
-                        if link.startswith('/'):
+                        if link.startswith('/') and not link.startswith('//'):
                             link = domain+link
-                        # if not link.startswith('http') and not link.startswith('www'):
-                        #     link = domain+link
                         master[1].append(link)
             a = master[1]
             b = master[2]                
@@ -50,7 +45,7 @@ def scraper(process_queue, done_queue,master_queue,master):
                         # if link.startswith('/'):
                         #     url=domain+link
                         master[3].append(link)
-                        process_queue.put(link)
+                        master_queue.put(link) #process_queue
                         master[7] = time.time()
                     elif cat == 'http':
                         master[6].append(link)
@@ -59,7 +54,6 @@ def scraper(process_queue, done_queue,master_queue,master):
                     elif cat == 'None':
                         master[2].append(link)
                 master[2].append(url)
-
 
 def get_listing(url):
     # headers = {
@@ -109,14 +103,19 @@ def valid(master1,master2):
 
 def main(master):
     global last
+    procs=[]
     for i in range(NUM_WORKERS):
         p = Process(target=scraper, args=(process_queue, done_queue,master_queue,master))
+        procs.append(p)
         p.start()
-        p.join()
-
+        
     while valid(master[1],master[2])>0 and (time.time()-master[7])<2:
-        print(time.time()-master[7])
+        #print(time.time()-master[7])
+        for domain in iter(master_queue.get, 'STOP'):
+            process_queue.put(domain)
 
+    for p in procs:
+        p.join()
 
     print('Big success')
     master[4]=list(set(master[4]))
