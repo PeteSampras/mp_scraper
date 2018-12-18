@@ -9,37 +9,43 @@ from urllib.parse import urljoin, urlparse
 from multiprocessing import Process, Queue, current_process, Manager
 import multiprocessing
 import numpy as np
+import re
+
 
 NUM_WORKERS = 4#multiprocessing.cpu_count()
 
+# global variables
 process_queue = Queue()
 found_queue = Queue()
 manager = Manager()
 master_dict = manager.dict()
+pattern = '//'
 
+class MultiThreadScraper: # class does all processing
 
-
-class MultiThreadScraper:
-
-   def __init__(self, base_url):
+   def __init__(self, base_url,masterdict):
        self.base_url = base_url
        self.root_url = '{}://{}'.format(urlparse(self.base_url).scheme, urlparse(self.base_url).netloc)
        self.pool = ThreadPoolExecutor(max_workers=500) # was 50
        self.scraped_pages = set([])
        self.to_crawl = Queue()
        self.to_crawl.put(base_url)
+       self.dict = masterdict
 
    def parse_links(self,html):
        soup = BeautifulSoup(html, 'html.parser')
        links = soup.find_all('a', href=True)
        for link in links:
            url = link['href']
+           if url.startswith('//'):
+               continue
            if url.startswith('/') or url.startswith(self.root_url):
                url = urljoin(self.root_url, url)
                if url not in self.scraped_pages:
                    self.to_crawl.put(url)
-                   print(url)
-                   found_queue.put(url)
+                   #print(url)
+                   #found_queue.put(url)
+                   self.dict.append(url)
 
    def scrape_info(self, html):
        return
@@ -60,7 +66,7 @@ class MultiThreadScraper:
    def run_scraper(self):
        while True:
            try:
-               target_url = self.to_crawl.get(timeout=10) # was 60
+               target_url = self.to_crawl.get(timeout=3) # was 60
                if target_url not in self.scraped_pages:
                    print("Scraping URL: {}".format(target_url))
                    self.scraped_pages.add(target_url)
@@ -79,7 +85,7 @@ def get_listing(url):
     links = url
     if url.startswith('/'):
         url = website+url
-    r = requests.get(url, timeout=10)         
+    r = requests.get(url, timeout=3)   # was 10      
     if r.status_code == 200:
         html = r.text
         soup = BeautifulSoup(html, 'html.parser')
@@ -112,49 +118,49 @@ def chunks(n, page_list):
     """Splits the list into n chunks"""
     return np.array_split(page_list,n)
 
-def threader(urls):
+def threader(urls,master):
     for url in urls:
-        s = MultiThreadScraper(url)
+        s = MultiThreadScraper(url,master)
         s.run_scraper()
 
 if __name__ == '__main__':
     # set up first dict
     master_dict[0] = manager.list()
 
+    # fake a website since this isnt a normal function yet
     website='https://www.devleague.com'
 
-    # get first scrape to split up into chunks
-    #url_list = get_listing(website)
+
+    #url_list = get_listing(website) # this would be useful if targeting a repository of links
     url_list=[]
     url_list.append(website)
     url_list = list(set(url_list))
     clean_url_list = parse(url_list,master_dict[0])
 
+    # split urls up into chunks if more than one
     chunk = chunks(NUM_WORKERS,clean_url_list)
     procs = []
-    for i in range(NUM_WORKERS):
+
+    # adjust actual size of processes if smaller to conserve cpu for threading
+    size = NUM_WORKERS
+    if len(clean_url_list) < NUM_WORKERS:
+        size = len(clean_url_list)
+
+    # create all processes
+    for i in range(size):
+        master_dict[i]=manager.list()
         print(chunk[i])
-        p = Process(target=threader, args=(chunk[i],))
+        p = Process(target=threader, args=(chunk[i],master_dict[i]))
         procs.append(p)
         p.start()
-        
+
+    # join all created processes    
     for p in procs:
         p.join()
 
-    # # set up workers
-    # for i in range(NUM_WORKERS):
-    #     p = Process(target=scraper, args=(process_queue, done_queue,master_queue,master))
-    #     p.start()
-    #     p.join()
-
-    # # get initial scrape
-
-    # # split up into even chunks
-
-    # # add them to queue for multithreading
-    # s = MultiThreadScraper("https://www.devleague.com")
-    # s.run_scraper()
-
-    found_queue.put('STOP')
-    for domain in iter(found_queue.get,'STOP'):
-        print("Q:" +domain)
+    # 
+    for i in range(size):
+        master_dict[i]=list(set(master_dict[i]))
+        print(len(master_dict[i]))
+        for domain in master_dict[i]:
+            print('Found: '+domain)
